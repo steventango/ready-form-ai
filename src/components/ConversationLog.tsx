@@ -38,7 +38,7 @@ export const ConversationLog: React.FC<ConversationLogProps> = ({ messages }) =>
 
   return (
     <div style={{
-      flex: '1 1 0',
+      flex: 1,
       overflowY: 'auto',
       display: 'flex',
       flexDirection: 'column',

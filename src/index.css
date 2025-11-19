@@ -126,32 +126,3 @@ button {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--border);
 }
-/* Two column layout */
-.two-column-layout {
-  display: flex;
-  gap: 2rem;
-  align-items: flex-start;
-  justify-content: space-between;
-  height: calc(100vh - 4rem); /* Adjust for any header/footer */
-}
-
-.left-column {
-  flex: 0 0 35%;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  overflow-y: auto;
-}
-
-.right-column {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-/* Ensure PDF viewer fills its container */
-.right-column > * {
-  flex: 1;
-  overflow: auto;
-}
