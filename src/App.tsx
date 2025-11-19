@@ -464,19 +464,41 @@ function App() {
               </button>
             </div>
 
-            {/* Live Transcript */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-              <ConversationLog messages={messages} />
-            </div>
+            {/* Live Transcript & Voice Controls */}
+            <div className="glass" style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 0,
+              borderRadius: 'var(--radius-lg)',
+              background: 'rgba(0, 0, 0, 0.2)',
+              overflow: 'hidden' // Ensure children don't spill out
+            }}>
+              {/* Header */}
+              <div style={{
+                padding: '1rem 1.5rem',
+                borderBottom: '1px solid var(--border)',
+                background: 'rgba(255, 255, 255, 0.03)'
+              }}>
+                <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Live Transcription</h3>
+              </div>
 
-            {/* Microphone Indicator */}
-            <div style={{ marginTop: '1.5rem' }}>
-              <VoiceAgent
-                isListening={isListening}
-                isSpeaking={isSpeaking}
-                lastTranscript={lastTranscript}
-                onToggle={() => isListening ? stopListening() : startListening()}
-              />
+              {/* Scrollable Log */}
+              <ConversationLog messages={messages} />
+
+              {/* Fixed Voice Controls */}
+              <div style={{
+                padding: '1.5rem',
+                borderTop: '1px solid var(--border)',
+                background: 'rgba(0, 0, 0, 0.1)'
+              }}>
+                <VoiceAgent
+                  isListening={isListening}
+                  isSpeaking={isSpeaking}
+                  lastTranscript={lastTranscript}
+                  onToggle={() => isListening ? stopListening() : startListening()}
+                />
+              </div>
             </div>
           </div>
 

@@ -13,25 +13,23 @@ interface ConversationLogProps {
 export const ConversationLog: React.FC<ConversationLogProps> = ({ messages }) => {
   const bottomRef = useRef<HTMLDivElement>(null);
 
+  // Auto-scroll to bottom
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   if (messages.length === 0) {
     return (
-      <div className="glass" style={{
-        padding: '1.5rem',
-        borderRadius: 'var(--radius-lg)',
+      <div style={{
         flex: 1,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'rgba(0, 0, 0, 0.2)',
         color: 'var(--text-muted)',
-        fontSize: '0.9rem'
+        fontSize: '0.9rem',
+        padding: '2rem'
       }}>
         <div style={{ textAlign: 'center' }}>
-          <h3 style={{ marginBottom: '0.5rem' }}>Live Transcription</h3>
           <p>Conversation will appear here...</p>
         </div>
       </div>
@@ -39,27 +37,21 @@ export const ConversationLog: React.FC<ConversationLogProps> = ({ messages }) =>
   }
 
   return (
-    <div className="glass" style={{
-      padding: '1.5rem',
-      borderRadius: 'var(--radius-lg)',
-      flex: 1,
+    <div style={{
+      flex: '1 1 0',
       overflowY: 'auto',
       display: 'flex',
       flexDirection: 'column',
       gap: '1rem',
-      background: 'rgba(0, 0, 0, 0.2)',
+      padding: '1rem',
       minHeight: 0
     }}>
-      <h3 style={{ position: 'sticky', top: 0, background: 'var(--bg-app)', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border)', margin: '-1rem -1rem 0.5rem -1rem', padding: '1rem', zIndex: 10 }}>
-        Live Transcription
-      </h3>
-
       {messages.map((msg, idx) => (
         <div
           key={msg.timestamp + idx}
           style={{
             alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-            maxWidth: '80%',
+            maxWidth: '85%',
             padding: '0.75rem 1rem',
             borderRadius: '1rem',
             borderBottomLeftRadius: msg.role === 'agent' ? '0' : '1rem',

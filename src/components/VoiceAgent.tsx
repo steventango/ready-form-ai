@@ -15,19 +15,11 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
   onToggle
 }) => {
   return (
-    <div className="glass" style={{
-      position: 'fixed',
-      bottom: '2rem',
-      right: '2rem',
-      padding: '1.5rem',
-      borderRadius: 'var(--radius-lg)',
+    <div style={{
       display: 'flex',
       flexDirection: 'column',
       gap: '1rem',
-      zIndex: 100,
-      width: '300px',
-      boxShadow: 'var(--shadow-lg)',
-      border: '1px solid var(--border)'
+      width: '100%',
     }}>
       <div className="flex-center" style={{ justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -51,7 +43,9 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: 'var(--shadow-glow)'
+            boxShadow: 'var(--shadow-glow)',
+            cursor: 'pointer',
+            border: 'none'
           }}
         >
           {isListening ? <MicOff size={20} color="white" /> : <Mic size={20} color="white" />}
@@ -62,7 +56,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({
         background: 'rgba(0,0,0,0.3)',
         padding: '1rem',
         borderRadius: 'var(--radius-sm)',
-        minHeight: '80px',
+        minHeight: '60px',
         fontSize: '0.95rem',
         color: lastTranscript ? 'var(--text-main)' : 'var(--text-muted)',
         fontStyle: lastTranscript ? 'normal' : 'italic'
