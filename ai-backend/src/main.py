@@ -1,95 +1,134 @@
-import torch
-import numpy as np
-import sounddevice as sd
-import soundfile as sf
-import transformers
-from transformers import Qwen3OmniMoeForConditionalGeneration as Q3M
-from transformers import Qwen3OmniMoeProcessor as Q3P
-from qwen_omni_utils import process_mm_info
-import screenshot
+import argparse
+import asyncio
+import datetime
+import logging
+import os
+import json
+import signal
+import sys
+import requests
 
-SR_UV, SR_QW, THRESH = 16000, 24000, 0.1
-DEV = "cuda"
+from typing import Any
 
-uv = transformers.pipeline(
-    model='fixie-ai/ultraVAD', trust_remote_code=True, device=DEV
-)
-qw = Q3M.from_pretrained(
-    "Qwen/Qwen3-Omni-30B-A3B-Instruct", dtype="auto", device_map="auto",
-    attn_implementation="flash_attention_2"
-)
-proc = Q3P.from_pretrained("Qwen/Qwen3-Omni-30B-A3B-Instruct")
+import ultravox_client as uv
+from dotenv import load_dotenv
 
-hist = [{
-    "role": "system",
-    "content": "You are Qwen-Omni. Interact using short spoken language."
-}]
-buf = np.array([], dtype=np.float32)
 
-print("Listening...")
+def unwrap(rq):
+    if 200 <= response.status_code <= 299:
+        return response.json()
+    else:
+        print(response.text)
+        raise Exception(f"Error: {response.status_code}")
 
-while True:
-    c = sd.rec(
-        int(0.5 * SR_UV), samplerate=SR_UV, channels=1, dtype='float32',
-        blocking=True
-    ).flatten()
-    buf = np.concatenate((buf, c))
-    if len(buf) < SR_UV: continue
 
-    in_dat = {"audio": buf, "turns": hist, "sampling_rate": SR_UV}
-    m_in = uv.preprocess(in_dat)
-    m_in = {k: (v.to(uv.device) if hasattr(v, "to") else v)
-            for k, v in m_in.items()}
+async def main(join_url):
+    session = uv.UltravoxSession()
+    last_transcript = None
+    done = asyncio.Event()
 
-    with torch.inference_mode():
-        out = uv.model.forward(**m_in, return_dict=True)
+    @session.on("status")
+    def on_status():
+        status = session.status
+        logging.info(f"status: {status}")
+        if status == uv.UltravoxSessionStatus.LISTENING:
+            # Prompt the user to make it clear they're expected to speak next.
+            print("User:  ", end="\r")
+        elif status == uv.UltravoxSessionStatus.DISCONNECTED:
+            done.set()
 
-    st = m_in["audio_token_start_idx"].item()
-    ln = m_in["audio_token_len"].item()
-    eot = uv.tokenizer.convert_tokens_to_ids("<|eot_id|>")
-    prob = torch.softmax(
-        out.logits[0, int(st + ln - 1), :].float(), dim=-1
-    )[eot].item()
+    @session.on("transcripts")
+    def on_transcript():
+        def transcript_to_str(transcript):
+            return f"{'User' if transcript.speaker == 'user' else 'Agent'}:  {transcript.text}"
 
-    if prob > THRESH:
-        sf.write("tmp.wav", buf, SR_UV)
-        screenshot.get_png().save("tmp.png")
+        nonlocal last_transcript
+        transcript = session.transcripts[-1]
+        if last_transcript and last_transcript.speaker != transcript.speaker:
+            print(transcript_to_str(last_transcript), end="\n")
+            last_transcript = None
+        next_print = transcript_to_str(transcript)
+        last_print = transcript_to_str(last_transcript) if last_transcript else ""
+        display_text = next_print + " " * max(0, len(last_print) - len(next_print))
+        last_transcript = transcript if not transcript.final else None
+        print(display_text, end="\n" if transcript.final else "\r")
 
-        u_msg = {
-            "role": "user",
-            "content": [
-                {"type": "image", "image": "tmp.png"},
-                {"type": "audio", "audio": "tmp.wav"},
-                {"type": "text", "text": "Analyze this."}
-            ]
+    @session.on("experimental_message")
+    def on_experimental_message(message):
+        logging.info(f"Received experimental message: {message}")
+
+    @session.on("error")
+    def on_error(error):
+        logging.exception("Client error", exc_info=error)
+        done.set()
+
+    def _get_secret_menu(params: dict[str, Any]) -> str:
+        result_dict = {
+            "date": datetime.date.today().isoformat(),
+            "specialItems": [
+                {"name": "Banana smoothie", "price": 3.99},
+                {"name": "Butter pecan ice cream (one scoop)", "price": 1.99},
+            ],
         }
+        return json.dumps(result_dict)
 
-        msgs = [hist[0], u_msg]
-        txt = proc.apply_chat_template(
-            msgs, add_generation_prompt=True, tokenize=False
-        )
-        aud, img, vid = process_mm_info(msgs, use_audio_in_video=False)
+    session.register_tool_implementation("getSecretMenu", _get_secret_menu)
 
-        q_in = proc(
-            text=txt, audio=aud, images=img, videos=vid, return_tensors="pt",
-            padding=True, use_audio_in_video=False
-        ).to(qw.device).to(qw.dtype)
+    await session.join_call(join_url)
+    loop = asyncio.get_running_loop()
+    loop.add_signal_handler(signal.SIGINT, lambda: done.set())
+    loop.add_signal_handler(signal.SIGTERM, lambda: done.set())
+    await done.wait()
+    await session.leave_call()
 
-        with torch.no_grad():
-            ids, wav = qw.generate(
-                **q_in, speaker="Ethan", thinker_return_dict_in_generate=True
-            )
 
-        res = proc.batch_decode(
-            ids.sequences[:, q_in["input_ids"].shape[1]:],
-            skip_special_tokens=True
-        )[0]
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(prog="client.py")
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Show verbose session information"
+    )
+    parser.add_argument(
+        "--very-verbose", "-vv", action="store_true", help="Show debug logs too"
+    )
+    parser.add_argument(
+        "--experimental-messages",
+        type=str,
+        help="Comma-separated list of experimental messages to enable (e.g. 'debug')",
+    )
 
-        hist.append({"role": "user", "content": "Audio processed."})
-        hist.append({"role": "assistant", "content": res})
+    load_dotenv()
+    args = parser.parse_args()
 
-        if wav is not None:
-            sd.play(wav.reshape(-1).detach().cpu().numpy(),
-                    samplerate=SR_QW, blocking=True)
+    if args.very_verbose:
+        logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
+    elif args.verbose:
+        logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+    if not args.very_verbose:
+        logging.getLogger("livekit").disabled = True
 
-        buf = np.array([], dtype=np.float32)
+    apikey = os.getenv("ULTRAVOX_KEY")
+    response = requests.get(
+        "https://api.ultravox.ai/api/agents",
+        headers={
+            "X-API-Key": apikey
+        },
+    )
+
+    agent_id = unwrap(response)['results'][0]['agentId']
+    print(agent_id)
+
+    response = requests.post(
+        f"https://api.ultravox.ai/api/agents/{agent_id}/calls",
+        headers={
+            "X-API-Key": apikey,
+            "Content-Type": "application/json",
+        },
+    )
+    data = unwrap(response)
+    join_url = data['joinUrl']
+    call_id = data['callId']
+
+    print(f"{call_id=}")
+    print(f"{join_url=}")
+
+    asyncio.run(main(join_url))
